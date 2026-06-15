@@ -11,8 +11,8 @@
 <style>
   :root{
     --bg:#070d0b; --bg2:#0a1310; --panel:#0c1512; --panel2:#0f1d18;
-    --line:#1a2a25; --line2:#23362f;
-    --txt:#e7f1ec; --dim:#6f8279; --mut:#48564f;
+    --line:#1a2a25; --line2:#2c4239;
+    --txt:#e7f1ec; --dim:#a7bcb1; --mut:#7d9388;
     --mint:#2ee6a6; --mint2:#1fb888; --amber:#d9a441; --red:#ff6b6b;
   }
   *{box-sizing:border-box}
@@ -95,6 +95,14 @@
     border-bottom:1px solid var(--line2)!important;padding-bottom:6px!important;
     position:sticky;top:0;background:var(--panel);z-index:1;}
   .sighead span{color:var(--mut)}
+  .tabs{display:flex;gap:8px;margin-top:14px;border-bottom:1px solid var(--line);padding-bottom:0;}
+  .tab{background:transparent;color:var(--dim);border:1px solid var(--line);border-bottom:none;
+    border-radius:8px 8px 0 0;padding:9px 18px;font-family:"JetBrains Mono",monospace;font-size:13px;
+    font-weight:500;letter-spacing:.04em;text-transform:none;cursor:pointer;}
+  .tab.active{background:var(--panel2);color:var(--mint);border-color:var(--line2);}
+  #tabcount{color:var(--mut);font-size:11px;}
+  .view{display:none;} .view.active{display:block;}
+  #view-signals .siglist{max-height:none;}
   .sigempty{color:var(--mut);font-family:"JetBrains Mono",monospace;font-size:12px;margin-top:6px;}
   @media(max-width:520px){.grid{grid-template-columns:1fr}.topbar .r{display:none}.sigpanel{margin:14px 14px 0}}
 </style>
@@ -118,6 +126,10 @@
     <span class="legend">| <b style="color:var(--mint)">━ EMA9</b> <b style="color:var(--amber)">━ EMA21</b> trend</span>
     <span class="legend">| signály: ▲ trend · ◆ breakout · ● RSI · ✚ rýchly &nbsp;(mint=nahor / červená=nadol)</span>
   </div>
+  <div class="tabs">
+    <button class="tab active" id="tab-markets" onclick="switchView('markets')">📊 Trhy</button>
+    <button class="tab" id="tab-signals" onclick="switchView('signals')">📋 Signály <span id="tabcount"></span></button>
+  </div>
 </header>
 <div id="app"><div class="err" style="color:var(--dim)">Načítavam dáta…</div></div>
 
@@ -127,6 +139,16 @@ const order = {green:0, orange:1, gray:2};
 const MINT="#2ee6a6", AMBER="#d9a441", RED="#ff6b6b", LINE="#23362f", PRICE="#cfe8df";
 const styleByType = {trend:"triangle", breakout:"rectRot", rsi:"circle", rapid:"crossRot"};
 let charts = [];
+let currentView = "markets";
+function switchView(v){
+  currentView = v;
+  document.getElementById('tab-markets').classList.toggle('active', v==='markets');
+  document.getElementById('tab-signals').classList.toggle('active', v==='signals');
+  const vm=document.getElementById('view-markets'), vs=document.getElementById('view-signals');
+  if(vm) vm.classList.toggle('active', v==='markets');
+  if(vs) vs.classList.toggle('active', v==='signals');
+  if(v==='markets') load();   // znovu vykresli grafy, kym je zalozka viditelna
+}
 function fmtSigned(x){ return (x>0?"+":"") + Number(x).toFixed(2) + " %"; }
 
 function priceChart(ctx, it){
@@ -219,7 +241,12 @@ async function load(){
     charts.forEach(c=>{try{c.destroy()}catch(e){}}); charts=[];
     if(!items.length){document.getElementById('app').innerHTML=
       '<div class="err" style="color:var(--dim)">// zatiaľ žiadne dáta — počkaj na ďalší beh skenera</div>';return;}
-    document.getElementById('app').innerHTML=signalsHTML(data.signals)+'<div class="grid">'+items.map(tileHTML).join('')+'</div>';
+    document.getElementById('app').innerHTML=
+      '<div id="view-markets" class="view'+(currentView==='markets'?' active':'')+'">'+
+        '<div class="grid">'+items.map(tileHTML).join('')+'</div></div>'+
+      '<div id="view-signals" class="view'+(currentView==='signals'?' active':'')+'">'+
+        signalsHTML(data.signals)+'</div>';
+    const tc=document.getElementById('tabcount'); if(tc) tc.textContent='('+((data.signals||[]).length)+')';
     items.forEach((it,i)=>{const pc=document.getElementById('p'+i),rc=document.getElementById('r'+i);
       if(pc)charts.push(priceChart(pc,it)); if(rc)charts.push(rsiChart(rc,it));});
     if(data.updated_ts){
