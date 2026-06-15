@@ -82,10 +82,13 @@
   .sigpanel{margin:14px 22px 0;border:1px solid var(--line);border-radius:8px;
     background:linear-gradient(180deg,var(--panel2),var(--panel));padding:12px 14px;}
   .siglist{margin-top:8px;max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:1px;}
-  .sigrow{display:grid;grid-template-columns:52px 14px 1fr auto auto;align-items:center;gap:10px;
+  .sigrow{display:grid;grid-template-columns:48px 14px 1fr auto auto 84px;align-items:center;gap:9px;
     font-family:"JetBrains Mono",monospace;font-size:12px;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.03);}
   .sigt{color:var(--mut)} .sigdot{width:9px;height:9px;border-radius:50%}
   .signame{color:var(--txt)} .sigtype{color:var(--dim)} .sigprice{color:var(--txt);text-align:right}
+  .sigres{text-align:right;font-weight:500} .sigres.ok{color:var(--mint)} .sigres.bad{color:var(--red)} .sigres.na{color:var(--mut)}
+  .tally{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--dim);margin-left:8px;}
+  .tally b{color:var(--mint)}
   .sigempty{color:var(--mut);font-family:"JetBrains Mono",monospace;font-size:12px;margin-top:6px;}
   @media(max-width:520px){.grid{grid-template-columns:1fr}.topbar .r{display:none}.sigpanel{margin:14px 14px 0}}
 </style>
@@ -176,15 +179,22 @@ function signalsHTML(sigs){
   const tl={rapid:"rýchly",trend_up:"trend ▲",trend_down:"trend ▼",
     breakout_up:"breakout ▲",breakout_down:"breakout ▼",
     rsi_overbought:"RSI prekúp.",rsi_oversold:"RSI prepred.",daily:"denný pohyb"};
+  let okN=0, evalN=0;
   const rows=sigs.map(s=>{
     const c=dotc[s.str]||"#6f8279"; const lbl=tl[s.typ]||s.typ;
+    let res='<span class="sigres na">–</span>';
+    if(typeof s.res_pct==="number"){ evalN++; if(s.ok) okN++;
+      const cls=s.ok?"ok":"bad"; const sign=s.res_pct>0?"+":"";
+      res=`<span class="sigres ${cls}">${s.ok?"✓":"✗"} ${sign}${s.res_pct}%</span>`;
+    }
     return `<div class="sigrow"><span class="sigt">${s.time||""}</span>`+
       `<span class="sigdot" style="background:${c}"></span>`+
       `<span class="signame">${s.name}</span>`+
       `<span class="sigtype">${lbl}</span>`+
-      `<span class="sigprice">${s.price}</span></div>`;
+      `<span class="sigprice">${s.price}</span>`+res+`</div>`;
   }).join("");
-  return `<div class="sigpanel"><div class="clabel">// dnešné signály (${sigs.length})</div>`+
+  const tally = evalN ? `<span class="tally">v správnom smere <b>${okN}/${evalN}</b> (${Math.round(okN/evalN*100)}%)</span>` : "";
+  return `<div class="sigpanel"><div class="clabel">// dnešné signály (${sigs.length}) ${tally}</div>`+
          `<div class="siglist">${rows}</div></div>`;
 }
 
@@ -202,7 +212,14 @@ async function load(){
     document.getElementById('app').innerHTML=signalsHTML(data.signals)+'<div class="grid">'+items.map(tileHTML).join('')+'</div>';
     items.forEach((it,i)=>{const pc=document.getElementById('p'+i),rc=document.getElementById('r'+i);
       if(pc)charts.push(priceChart(pc,it)); if(rc)charts.push(rsiChart(rc,it));});
-    document.getElementById('stamp').textContent="// aktualizované: "+(data.updated||"—");
+    if(data.updated_ts){
+      const ms=data.updated_ts*1000;
+      const loc=new Date(ms).toLocaleTimeString('sk-SK',{hour:'2-digit',minute:'2-digit'});
+      const ago=Math.max(0,Math.round((Date.now()-ms)/60000));
+      document.getElementById('stamp').textContent=`// aktualizované ${loc} (pred ${ago} min)`;
+    } else {
+      document.getElementById('stamp').textContent="// aktualizované: "+(data.updated||"—");
+    }
   }catch(e){
     document.getElementById('app').innerHTML=
       '<div class="err" style="color:var(--red)">// nepodarilo sa načítať dáta ('+e.message+')<br>'+
