@@ -82,11 +82,12 @@
   .sigpanel{margin:14px 22px 0;border:1px solid var(--line);border-radius:8px;
     background:linear-gradient(180deg,var(--panel2),var(--panel));padding:12px 14px;}
   .siglist{margin-top:8px;max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:1px;}
-  .sigrow{display:grid;grid-template-columns:48px 14px 1fr auto auto 84px;align-items:center;gap:9px;
+  .sigrow{display:grid;grid-template-columns:50px 12px 168px 118px 74px 96px 1fr;align-items:center;gap:12px;
     font-family:"JetBrains Mono",monospace;font-size:12px;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.03);}
   .sigt{color:var(--mut)} .sigdot{width:9px;height:9px;border-radius:50%}
-  .signame{color:var(--txt)} .sigtype{color:var(--dim)} .sigprice{color:var(--txt);text-align:right}
-  .sigres{text-align:right;font-weight:500} .sigres.ok{color:var(--mint)} .sigres.bad{color:var(--red)} .sigres.na{color:var(--mut)}
+  .signame{color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sigtype{color:var(--dim);white-space:nowrap} .sigprice{color:var(--txt);text-align:right}
+  .sigres{text-align:left;font-weight:500} .sigres.ok{color:var(--mint)} .sigres.bad{color:var(--red)} .sigres.na{color:var(--mut)}
   .tally{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--dim);margin-left:8px;}
   .tally b{color:var(--mint)}
   .sigempty{color:var(--mut);font-family:"JetBrains Mono",monospace;font-size:12px;margin-top:6px;}
