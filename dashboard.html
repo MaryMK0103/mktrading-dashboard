@@ -114,6 +114,25 @@
   .sigres{text-align:left;font-weight:600} .sigres.ok{color:var(--mint)} .sigres.bad{color:var(--red)} .sigres.na{color:var(--mut)}
   .sigempty{color:var(--mut);font-family:"JetBrains Mono",monospace;font-size:12.5px;margin-top:10px}
   .err{padding:22px;font-family:"JetBrains Mono",monospace}
+  /* --- reports + date groups --- */
+  .datehdr{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--mint);margin:16px 0 4px;padding-bottom:5px;border-bottom:1px solid var(--line2);display:flex;gap:10px;align-items:center}
+  .datehdr .cnt{color:var(--mut)}
+  .repbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  select{background:var(--panel2);color:var(--txt);border:1px solid var(--line2);border-radius:8px;
+    padding:9px 12px;font-family:"JetBrains Mono",monospace;font-size:13px;cursor:pointer}
+  .exportbtn{display:inline-flex;align-items:center;gap:7px;background:transparent;color:var(--mint);
+    border:1px solid var(--mint);border-radius:8px;padding:8px 14px;font-family:"JetBrains Mono",monospace;
+    font-size:12.5px;font-weight:600;cursor:pointer;letter-spacing:.04em}
+  .exportbtn:hover{background:rgba(46,230,166,.1)}
+  .repstats{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+  .stat{border:1px solid var(--line);border-radius:9px;padding:10px 16px;background:var(--panel2);min-width:90px}
+  .stat .v{font-family:"JetBrains Mono",monospace;font-size:20px;font-weight:600}
+  .stat .k{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-top:2px}
+  .analysis{margin:6px 0 16px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+  .analysis .t{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mint);margin-bottom:8px}
+  .analysis ul{margin:0;padding-left:18px} .analysis li{font-size:13.5px;color:var(--dim);margin:4px 0;line-height:1.45}
+  .repmsg{padding:20px 2px;color:var(--mut);font-family:"JetBrains Mono",monospace;font-size:12.5px}
   @media(max-width:560px){.view{padding:14px}.grid{grid-template-columns:1fr}.topbar .r{display:none}
     .sigrow{grid-template-columns:46px 12px 1fr auto auto;gap:9px}
     .sigrow .sigtype,.sighead span:nth-child(4){display:none}}
@@ -154,6 +173,9 @@
     <button class="tab" id="tab-signals" onclick="switchView('signals')">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.3" fill="currentColor"/><circle cx="3.5" cy="12" r="1.3" fill="currentColor"/><circle cx="3.5" cy="18" r="1.3" fill="currentColor"/></svg>
       Signály <span class="c" id="tabcount"></span></button>
+    <button class="tab" id="tab-reports" onclick="switchView('reports')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+      Reporty dňa</button>
   </div>
 </header>
 <div id="app"><div class="err" style="color:var(--dim)">// načítavam dáta…</div></div>
@@ -166,15 +188,15 @@ const styleByType = {trend:"triangle", breakout:"rectRot", rsi:"circle", rapid:"
 const dotc={green:"#2ee6a6",orange:"#e0b15a",red:"#ff6b6b",blue:"#58a6ff",gray:"#7e9389"};
 const TL={rapid:"rýchly",trend_up:"trend ▲",trend_down:"trend ▼",breakout_up:"breakout ▲",
   breakout_down:"breakout ▼",rsi_overbought:"RSI prekúp.",rsi_oversold:"RSI prepred.",daily:"denný pohyb"};
-let charts=[], currentView="markets";
+const RAW_REPORTS="https://gist.githubusercontent.com/MaryMK0103/3213c918f099b2ce665923900a2639cf/raw/reports.json";
+let charts=[], currentView="markets", latestData=null, reports=[], selectedReportDate=null;
 
 function switchView(v){
   currentView=v;
-  document.getElementById('tab-markets').classList.toggle('active',v==='markets');
-  document.getElementById('tab-signals').classList.toggle('active',v==='signals');
-  const vm=document.getElementById('view-markets'),vs=document.getElementById('view-signals');
-  if(vm) vm.classList.toggle('active',v==='markets');
-  if(vs) vs.classList.toggle('active',v==='signals');
+  ['markets','signals','reports'].forEach(t=>{
+    const tb=document.getElementById('tab-'+t); if(tb) tb.classList.toggle('active',v===t);
+    const el=document.getElementById('view-'+t); if(el) el.classList.toggle('active',v===t);
+  });
   if(v==='markets') load();
 }
 function fmtSigned(x){ return (x>0?"+":"")+Number(x).toFixed(2)+" %"; }
@@ -219,39 +241,86 @@ function tileHTML(it,idx){
     <div class="crow"><span>RSI ${it.rsi}</span><span>ATR ${it.atr_pct}%</span><span>MAX ${fmtSigned(it.dist_high)}</span></div>
   </div>`;
 }
-function signalsHTML(sigs){
-  const head=`<div class="sigrow sighead"><span>čas</span><span></span><span>trh</span>
-    <span>signál</span><span style="text-align:right">cena</span><span>výsledok</span></div>`;
-  const hint=`<div class="sighint">
+function sigHint(){
+  return `<div class="sighint">
     <span class="lg"><span class="sw" style="background:#ff6b6b"></span>slabý</span>
     <span class="lg"><span class="sw" style="background:#e0b15a"></span>RSI</span>
     <span class="lg"><span class="sw" style="background:#2ee6a6"></span>zhoda</span>
     <span class="lg"><span class="sw" style="background:#58a6ff"></span>denný</span>
     <span style="color:var(--mut)">| ✓ cena šla v smere signálu · ✗ nešla (% odvtedy)</span></div>`;
-  if(!sigs || !sigs.length)
-    return `<div class="sigpanel"><div class="sptitle">dnešné signály</div>${hint}
-      <div class="sigempty">// zatiaľ žiadne signály dnes</div></div>`;
-  let okN=0,evalN=0;
-  const rows=sigs.map(s=>{
-    const c=dotc[s.str]||"#7e9389",lbl=TL[s.typ]||s.typ;
-    let res='<span class="sigres na">–</span>';
-    if(typeof s.res_pct==="number"){evalN++;if(s.ok)okN++;
-      res=`<span class="sigres ${s.ok?'ok':'bad'}">${s.ok?'✓':'✗'} ${s.res_pct>0?'+':''}${s.res_pct}%</span>`;}
-    return `<div class="sigrow"><span class="sigt">${s.time||""}</span>
-      <span class="sigdot" style="background:${c}"></span>
-      <span class="signame">${s.name}</span><span class="sigtype">${lbl}</span>
-      <span class="sigprice">${s.price}</span>${res}</div>`;
-  }).join("");
-  const tally=evalN?`<span class="tally">v správnom smere <b>${okN}/${evalN}</b> (${Math.round(okN/evalN*100)}%)</span>`:"";
-  return `<div class="sigpanel"><div class="sptitle">dnešné signály (${sigs.length})${tally}</div>
-    ${hint}<div class="siglist">${head}${rows}</div></div>`;
+}
+function sigHeader(){
+  return `<div class="sigrow sighead"><span>čas</span><span></span><span>trh</span>
+    <span>signál</span><span style="text-align:right">cena</span><span>výsledok</span></div>`;
+}
+function _good(s){ return s.ok!==undefined ? s.ok : (s.res_pct>0); }
+function sigRow(s){
+  const c=dotc[s.str]||"#7e9389", lbl=TL[s.typ]||s.typ;
+  let res='<span class="sigres na">–</span>';
+  if(typeof s.res_pct==="number"){ const g=_good(s);
+    res=`<span class="sigres ${g?'ok':'bad'}">${g?'✓':'✗'} ${s.res_pct>0?'+':''}${s.res_pct}%</span>`; }
+  return `<div class="sigrow"><span class="sigt">${s.time||""}</span>
+    <span class="sigdot" style="background:${c}"></span>
+    <span class="signame">${s.name}</span><span class="sigtype">${lbl}</span>
+    <span class="sigprice">${s.price}</span>${res}</div>`;
+}
+function sigTable(sigs){ return `<div class="siglist">${sigHeader()}${sigs.map(sigRow).join("")}</div>`; }
+function tallyHTML(sigs){
+  let ok=0,ev=0; sigs.forEach(s=>{ if(typeof s.res_pct==="number"){ev++; if(_good(s))ok++;} });
+  return ev?`<span class="tally">v správnom smere <b>${ok}/${ev}</b> (${Math.round(ok/ev*100)}%)</span>`:"";
+}
+function todayStr(){ return new Date().toLocaleDateString('sv-SE'); }
+
+function renderSignalsByDate(){
+  const groups={}; const today=todayStr();
+  ((latestData&&latestData.signals)||[]).forEach(s=>{(groups[today]=groups[today]||[]).push(s);});
+  (reports||[]).forEach(r=>{ if(r.date!==today){(groups[r.date]=groups[r.date]||[]).push(...(r.signals||[]));}});
+  const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  if(!dates.length) return `<div class="sigpanel"><div class="sptitle">signály</div>${sigHint()}<div class="sigempty">// zatiaľ žiadne signály</div></div>`;
+  let html=`<div class="sigpanel"><div class="sptitle">signály — podľa dní</div>${sigHint()}`;
+  dates.forEach(d=>{ const sg=groups[d];
+    html+=`<div class="datehdr">${d} <span class="cnt">(${sg.length})</span> ${tallyHTML(sg)}</div>${sigTable(sg)}`; });
+  return html+`</div>`;
+}
+
+function renderReports(){
+  if(!reports || !reports.length)
+    return `<div class="sigpanel"><div class="sptitle">reporty dňa</div>
+      <div class="repmsg">// zatiaľ žiadny report — prvý príde dnes o 22:00</div></div>`;
+  if(!selectedReportDate || !reports.find(r=>r.date===selectedReportDate)) selectedReportDate=reports[0].date;
+  const opts=reports.map(r=>`<option value="${r.date}"${r.date===selectedReportDate?' selected':''}>${r.date}</option>`).join("");
+  const rep=reports.find(r=>r.date===selectedReportDate);
+  const stat=(v,k)=>`<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  let detail=`<div class="repstats">${stat(rep.total,"signálov")}${stat(rep.ok,"vyšli")}${stat(rep.bad,"nevyšli")}`+
+    `${stat(rep.hitrate==null?"–":rep.hitrate+"%","úspešnosť")}${stat((rep.avg>0?"+":"")+rep.avg+"%","priemer")}</div>`;
+  if(rep.analysis && rep.analysis.length)
+    detail+=`<div class="analysis"><div class="t">🔎 prečo nevyšlo</div><ul>`+rep.analysis.map(a=>`<li>${a}</li>`).join("")+`</ul></div>`;
+  detail+=sigTable(rep.signals||[]);
+  return `<div class="sigpanel"><div class="sptitle">report dňa</div>
+    <div class="repbar"><select onchange="selectReport(this.value)">${opts}</select>
+      <button class="exportbtn" onclick="exportDay('${selectedReportDate}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ee6a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export CSV</button></div>${detail}</div>`;
+}
+function selectReport(d){ selectedReportDate=d; const el=document.getElementById('view-reports'); if(el) el.innerHTML=renderReports(); }
+function exportDay(date){
+  let sigs=[]; const r=(reports||[]).find(x=>x.date===date); if(r) sigs=r.signals||[];
+  if(date===todayStr() && latestData) sigs=latestData.signals||sigs;
+  const head=["cas","trh","typ","smer","cena","sila","vysledok_%"];
+  const rows=sigs.map(s=>[s.time||"",s.name||"",s.typ||"",s.dir||"",s.price??"",s.str||"",(typeof s.res_pct==="number"?s.res_pct:"")]);
+  const csv=[head,...rows].map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const b=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=`signaly_${date}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
 }
 async function load(){
   document.getElementById('stamp').textContent="// načítavam…";
   try{
     const r=await fetch(RAW+"?t="+Date.now(),{cache:"no-store"});
     if(!r.ok) throw new Error("HTTP "+r.status);
-    const data=await r.json();
+    const data=await r.json(); latestData=data;
+    try{ const rr=await fetch(RAW_REPORTS+"?t="+Date.now(),{cache:"no-store"}); reports=rr.ok?await rr.json():[]; }catch(e){ reports=[]; }
+    if(!Array.isArray(reports)) reports=[];
     const items=(data.items||[]).slice().sort((a,b)=>
       (order[a.status]-order[b.status])||(Math.abs(b.chg_pct)-Math.abs(a.chg_pct)));
     charts.forEach(c=>{try{c.destroy()}catch(e){}});charts=[];
@@ -260,8 +329,8 @@ async function load(){
     document.getElementById('app').innerHTML=
       '<div id="view-markets" class="view'+(currentView==='markets'?' active':'')+'"><div class="grid">'+
         items.map(tileHTML).join('')+'</div></div>'+
-      '<div id="view-signals" class="view'+(currentView==='signals'?' active':'')+'">'+
-        signalsHTML(data.signals)+'</div>';
+      '<div id="view-signals" class="view'+(currentView==='signals'?' active':'')+'">'+renderSignalsByDate()+'</div>'+
+      '<div id="view-reports" class="view'+(currentView==='reports'?' active':'')+'">'+renderReports()+'</div>';
     const tc=document.getElementById('tabcount');if(tc)tc.textContent='('+((data.signals||[]).length)+')';
     items.forEach((it,i)=>{const pc=document.getElementById('p'+i),rc=document.getElementById('r'+i);
       if(pc)charts.push(priceChart(pc,it));if(rc)charts.push(rsiChart(rc,it));});
