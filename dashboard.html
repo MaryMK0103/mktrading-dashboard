@@ -133,6 +133,10 @@
   .analysis .t{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mint);margin-bottom:8px}
   .analysis ul{margin:0;padding-left:18px} .analysis li{font-size:13.5px;color:var(--dim);margin:4px 0;line-height:1.45}
   .repmsg{padding:20px 2px;color:var(--mut);font-family:"JetBrains Mono",monospace;font-size:12.5px}
+  .modebtn{background:transparent;color:var(--dim);border:1px solid var(--line2);border-radius:8px;
+    padding:7px 16px;font-family:"JetBrains Mono",monospace;font-size:12.5px;cursor:pointer;letter-spacing:.03em}
+  .modebtn:hover{color:var(--txt)} .modebtn.on{background:var(--panel3);color:var(--mint);border-color:var(--mint)}
+  .modebtn .c{color:var(--mut);font-size:11px}
   @media(max-width:560px){.view{padding:14px}.grid{grid-template-columns:1fr}.topbar .r{display:none}
     .sigrow{grid-template-columns:46px 12px 1fr auto auto;gap:9px}
     .sigrow .sigtype,.sighead span:nth-child(4){display:none}}
@@ -190,6 +194,7 @@ const TL={rapid:"rýchly",trend_up:"trend ▲",trend_down:"trend ▼",breakout_u
   breakout_down:"breakout ▼",rsi_overbought:"RSI prekúp.",rsi_oversold:"RSI prepred.",daily:"denný pohyb"};
 const RAW_REPORTS="https://gist.githubusercontent.com/MaryMK0103/3213c918f099b2ce665923900a2639cf/raw/reports.json";
 let charts=[], currentView="markets", latestData=null, reports=[], selectedReportDate=null;
+let signalsMode="today", archiveDate=null;
 
 function switchView(v){
   currentView=v;
@@ -271,16 +276,30 @@ function tallyHTML(sigs){
 }
 function todayStr(){ return new Date().toLocaleDateString('sv-SE'); }
 
-function renderSignalsByDate(){
-  const groups={}; const today=todayStr();
-  (reports||[]).forEach(r=>{ if(r.signals && r.signals.length) groups[r.date]=r.signals; });
-  if(!groups[today] && latestData && ((latestData.signals||[]).length)) groups[today]=latestData.signals;
-  const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
-  if(!dates.length) return `<div class="sigpanel"><div class="sptitle">signály</div>${sigHint()}<div class="sigempty">// zatiaľ žiadne signály</div></div>`;
-  let html=`<div class="sigpanel"><div class="sptitle">signály — podľa dní</div>${sigHint()}`;
-  dates.forEach(d=>{ const sg=groups[d];
-    html+=`<div class="datehdr">${d} <span class="cnt">(${sg.length})</span> ${tallyHTML(sg)}</div>${sigTable(sg)}`; });
-  return html+`</div>`;
+function setSigMode(m){ signalsMode=m; const el=document.getElementById('view-signals'); if(el) el.innerHTML=renderSignals(); }
+function setArchiveDate(d){ archiveDate=d; const el=document.getElementById('view-signals'); if(el) el.innerHTML=renderSignals(); }
+function renderSignals(){
+  const today=todayStr();
+  const todayRep=(reports||[]).find(r=>r.date===today);
+  const todaySigs = todayRep ? (todayRep.signals||[]) : (((latestData&&latestData.signals)||[]));
+  const pastDays=(reports||[]).filter(r=>r.date!==today && (r.signals||[]).length).map(r=>r.date).sort((a,b)=>b.localeCompare(a));
+  const toolbar=`<div class="repbar">
+    <button class="modebtn ${signalsMode==='today'?'on':''}" onclick="setSigMode('today')">Dnes</button>
+    <button class="modebtn ${signalsMode==='archive'?'on':''}" onclick="setSigMode('archive')">Archív <span class="c">(${pastDays.length})</span></button></div>`;
+  if(signalsMode==='today'){
+    const body = todaySigs.length ? sigTable(todaySigs) : '<div class="sigempty">// dnes zatiaľ žiadne signály</div>';
+    return `<div class="sigpanel"><div class="sptitle">signály — dnes (${todaySigs.length}) ${tallyHTML(todaySigs)}</div>${toolbar}${sigHint()}${body}</div>`;
+  }
+  if(!pastDays.length)
+    return `<div class="sigpanel"><div class="sptitle">signály — archív</div>${toolbar}<div class="sigempty">// archív je zatiaľ prázdny — naplní sa ďalšími dňami</div></div>`;
+  if(!archiveDate || !pastDays.includes(archiveDate)) archiveDate=pastDays[0];
+  const sigs=((reports||[]).find(r=>r.date===archiveDate)||{}).signals||[];
+  const opts=pastDays.map(d=>`<option value="${d}"${d===archiveDate?' selected':''}>${d}</option>`).join("");
+  return `<div class="sigpanel"><div class="sptitle">signály — archív · ${archiveDate} (${sigs.length}) ${tallyHTML(sigs)}</div>${toolbar}
+    <div class="repbar"><select onchange="setArchiveDate(this.value)">${opts}</select>
+      <button class="exportbtn" onclick="exportDay('${archiveDate}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ee6a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export CSV</button></div>${sigHint()}${sigTable(sigs)}</div>`;
 }
 
 function renderReports(){
@@ -329,7 +348,7 @@ async function load(){
     document.getElementById('app').innerHTML=
       '<div id="view-markets" class="view'+(currentView==='markets'?' active':'')+'"><div class="grid">'+
         items.map(tileHTML).join('')+'</div></div>'+
-      '<div id="view-signals" class="view'+(currentView==='signals'?' active':'')+'">'+renderSignalsByDate()+'</div>'+
+      '<div id="view-signals" class="view'+(currentView==='signals'?' active':'')+'">'+renderSignals()+'</div>'+
       '<div id="view-reports" class="view'+(currentView==='reports'?' active':'')+'">'+renderReports()+'</div>';
     const tc=document.getElementById('tabcount');if(tc)tc.textContent='('+((data.signals||[]).length)+')';
     items.forEach((it,i)=>{const pc=document.getElementById('p'+i),rc=document.getElementById('r'+i);
